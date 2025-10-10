@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Live | Hacker News</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Real-time Hacker News feed powered by Datastar">
+  <link rel="icon" href="https://news.ycombinator.com/y18.svg">
+  <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.5/bundles/datastar.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Verdana, Geneva, sans-serif;
+      font-size: 10pt;
+      margin: 0;
+      padding: 0;
+      background-color: #f6f6ef;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+    
+    #main {
+      max-width: 85%;
+      width: 796px;
+      margin: 0 auto;
+      background-color: #f6f6ef;
+      padding-bottom: 3px;
+      min-height: 100vh;
+    }
+
+    @media (max-width: 900px) {
+      #main {
+        width: 100%;
+        max-width: 100%;
+      }
+    }
+
+    header {
+      background-color: #ff6600;
+      padding: 2px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    header > * {
+      white-space: nowrap;
+    }
+
+    .logo {
+      width: 18px;
+      height: 18px;
+      border: 1px white solid;
+      margin-right: 1px;
+      display: block;
+    }
+
+    header a.current {
+      color: white;
+    }
+
+    .header-right {
+      margin-left: auto;
+      margin-right: 2px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .cache-info {
+      font-size: 8pt;
+      color: white;
+      opacity: 0.9;
+    }
+
+    main {
+      animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .item {
+      animation: slideIn 0.4s ease-out;
+    }
+
+    .comment {
+      margin: 0 8px 20px 8px;
+      font-size: 9pt;
+      display: flex;
+      align-items: flex-start;
+      padding-right: 20px;
+    }
+
+    .story {
+      margin: 0 9px 20px 9px;
+      font-size: 10pt;
+      display: flex;
+      align-items: flex-start;
+      padding-right: 20px;
+    }
+
+    .upvote {
+      flex-shrink: 0;
+      margin-right: 7px;
+      margin-top: 1px;
+      width: 10px;
+      height: 10px;
+    }
+
+    .content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .comment-header {
+      font-size: 8pt;
+      color: #828282;
+      margin-bottom: 6px;
+    }
+
+    .comment-header .separator {
+      margin: 0 3px;
+    }
+
+    .comment-body {
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .comment-body a:visited {
+      color: #828282;
+    }
+
+    .comment-body p {
+      margin: 8px 0 0 0;
+    }
+
+    .story-titleline {
+      margin-bottom: 5px;
+    }
+
+    .story-title {
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .story-title:visited {
+      color: #828282;
+    }
+
+    .story-domain {
+      color: #828282;
+      font-size: 8pt;
+      margin-left: 3px;
+    }
+
+    .story-subline {
+      font-size: 7pt;
+      color: #828282;
+      margin-bottom: 6px;
+    }
+
+    .story-subline .separator {
+      margin: 0 3px;
+    }
+
+    .story-subline .by-text {
+      margin: 0 3px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #828282;
+      font-size: 9pt;
+    }
+
+    .error {
+      margin: 20px;
+      padding: 15px;
+      background-color: #ffe0e0;
+      border: 1px solid #ff6b6b;
+      border-radius: 4px;
+      color: #c92a2a;
+      font-size: 9pt;
+    }
+
+    .load-more-container {
+      text-align: center;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .load-more-btn {
+      background-color: #ff6600;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      font-size: 9pt;
+      font-family: Verdana, Geneva, sans-serif;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+
+    .load-more-btn:hover {
+      background-color: #ff7700;
+    }
+
+    .load-more-btn:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div id="main" 
+       data-signals-items="[]"
+       data-signals-maxItemId="0"
+       data-signals-displayedIds="{}"
+       data-signals-cachedCount="0"
+       data-signals-loading="true"
+       data-signals-error=""
+       data-signals-unloadedCount="0">
+    <header>
+      <img src="https://news.ycombinator.com/y18.svg" class="logo" alt="Y">
+      <b><a href="https://news.ycombinator.com/news">Hacker News</a></b>
+      <a href="https://news.ycombinator.com/newest">new</a> |
+      <a href="https://news.ycombinator.com/threads">threads</a> |
+      <a href="https://news.ycombinator.com/front">past</a> |
+      <a href="https://news.ycombinator.com/newcomments">comments</a> |
+      <a href="https://news.ycombinator.com/ask">ask</a> |
+      <a href="https://news.ycombinator.com/show">show</a> |
+      <a href="https://news.ycombinator.com/jobs">jobs</a> |
+      <a href="https://news.ycombinator.com/submit">submit</a> |
+      <a href="#" class="current">live</a>
+      <span class="header-right">
+        <span class="cache-info" data-show="$cachedCount > 0">
+          <span data-text="`${$cachedCount} cached`"></span>
+        </span>
+        <a href="https://github.com/jerbear2008/hn-live" target="_blank" rel="noopener">repo</a>
+      </span>
+    </header>
+
+    <main role="main" aria-live="polite" aria-label="Live feed">
+      <div class="loading" data-show="$loading">Loading live feed...</div>
+      <div class="error" data-show="$error.length > 0" data-text="$error"></div>
+      
+      <template data-for="item in $items">
+        <div class="item" data-attr-data-item-id="item.id">
+          <!-- Story -->
+          <template data-if="item.type === 'story' || item.type === 'ask' || item.type === 'job' || item.type === 'poll'">
+            <div class="story">
+              <img class="upvote" src="https://news.ycombinator.com/triangle.svg" alt="upvote">
+              <div class="content">
+                <div class="story-titleline">
+                  <a class="story-title" 
+                     data-attr-href="item.url || `https://news.ycombinator.com/item?id=${item.id}`"
+                     data-text="item.dead ? '[dead]' : (item.title || '[no title]')"></a>
+                  <template data-if="item.url">
+                    <span class="story-domain">
+                      (<a data-attr-href="`https://news.ycombinator.com/from?site=${encodeURIComponent(item.domain || '')}`"
+                          data-text="item.domain"
+                          rel="nofollow"></a>)
+                    </span>
+                  </template>
+                </div>
+                <div class="story-subline">
+                  <span data-text="`${item.score || 0} point${(item.score || 0) === 1 ? '' : 's'}`"></span>
+                  <span class="by-text">by</span>
+                  <a data-attr-href="`https://news.ycombinator.com/user?id=${item.by}`"
+                     data-text="item.by || '[deleted]'"
+                     rel="nofollow"></a>
+                  <a data-attr-href="`https://news.ycombinator.com/item?id=${item.id}`"
+                     data-text="item.timeAgo"></a>
+                  <span class="separator">|</span>
+                  <template data-if="item.url">
+                    <a data-attr-href="`https://hn.algolia.com/?query=${encodeURIComponent(item.title || '')}&type=story&dateRange=all&sort=byDate&storyText=false&prefix&page=0`">past</a>
+                    <span class="separator">|</span>
+                  </template>
+                  <a data-attr-href="`https://news.ycombinator.com/item?id=${item.id}`"
+                     data-text="`${(item.kids || []).length} comment${(item.kids || []).length === 1 ? '' : 's'}`"></a>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Comment -->
+          <template data-if="item.type === 'comment' || item.type === 'pollopt'">
+            <div class="comment">
+              <img class="upvote" src="https://news.ycombinator.com/triangle.svg" alt="upvote">
+              <div class="content">
+                <div class="comment-header">
+                  <a data-attr-href="`https://news.ycombinator.com/user?id=${item.by}`"
+                     data-text="item.by || '[deleted]'"
+                     rel="nofollow"></a>
+                  <a data-attr-href="`https://news.ycombinator.com/item?id=${item.id}`"
+                     data-text="item.timeAgo"></a>
+                  <span class="separator">|</span>
+                  <a data-attr-href="`https://news.ycombinator.com/item?id=${item.parent}`">parent</a>
+                </div>
+                <div class="comment-body" data-html="item.text || '[deleted]'"></div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+    </main>
+
+    <div class="load-more-container">
+      <button class="load-more-btn"
+              data-on-click="loadMoreItems()"
+              data-attr-disabled="$unloadedCount === 0">
+        <span data-text="$unloadedCount > 0 ? `Load More (${$unloadedCount} cached)` : 'No more cached items'"></span>
+      </button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.9.3/firebase-app.js';
+    import { getDatabase, ref, onValue, get } from 'https://www.gstatic.com/firebasejs/9.9.3/firebase-database.js';
+    
+    const app = initializeApp({
+      databaseURL: 'https://hacker-news.firebaseio.com',
+    });
+    const db = getDatabase(app);
+
+    // Storage Manager
+    class StorageManager {
+      constructor() {
+        this.ITEMS_KEY = 'hn_live_items';
+        this.METADATA_KEY = 'hn_live_metadata';
+        this.MAX_ITEMS = 1000;
+        this.MAX_AGE_DAYS = 7;
+      }
+
+      saveItem(id, data) {
+        try {
+          const items = this.getAllItems();
+          items[id] = {
+            data,
+            timestamp: Date.now()
+          };
+          
+          this.cleanOldItems(items);
+          localStorage.setItem(this.ITEMS_KEY, JSON.stringify(items));
+          this.updateMetadata();
+        } catch (error) {
+          console.warn('Failed to save to localStorage:', error);
+          if (error.name === 'QuotaExceededError') {
+            this.clearOldItems(30);
+            try {
+              const items = this.getAllItems();
+              items[id] = { data, timestamp: Date.now() };
+              localStorage.setItem(this.ITEMS_KEY, JSON.stringify(items));
+            } catch (e) {
+              console.error('Still failed after cleanup:', e);
+            }
+          }
+        }
+      }
+
+      getItem(id) {
+        try {
+          const items = this.getAllItems();
+          const item = items[id];
+          if (!item) return null;
+          
+          const ageInDays = (Date.now() - item.timestamp) / (1000 * 60 * 60 * 24);
+          if (ageInDays > this.MAX_AGE_DAYS) {
+            delete items[id];
+            localStorage.setItem(this.ITEMS_KEY, JSON.stringify(items));
+            return null;
+          }
+          
+          return item.data;
+        } catch (error) {
+          console.warn('Failed to read from localStorage:', error);
+          return null;
+        }
+      }
+
+      getAllItems() {
+        try {
+          const data = localStorage.getItem(this.ITEMS_KEY);
+          return data ? JSON.parse(data) : {};
+        } catch (error) {
+          console.warn('Failed to parse localStorage:', error);
+          return {};
+        }
+      }
+
+      getStoredItemIds() {
+        const items = this.getAllItems();
+        return Object.keys(items).map(Number).sort((a, b) => b - a);
+      }
+
+      cleanOldItems(items) {
+        const entries = Object.entries(items);
+        const maxAge = this.MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        const validEntries = entries.filter(([_, item]) => 
+          (now - item.timestamp) < maxAge
+        );
+        
+        if (validEntries.length > this.MAX_ITEMS) {
+          validEntries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+          validEntries.splice(this.MAX_ITEMS);
+        }
+        
+        const cleanedItems = {};
+        for (const [id, item] of validEntries) {
+          cleanedItems[id] = item;
+        }
+        
+        Object.keys(items).forEach(key => delete items[key]);
+        Object.assign(items, cleanedItems);
+      }
+
+      clearOldItems(daysOld) {
+        try {
+          const items = this.getAllItems();
+          const cutoff = Date.now() - (daysOld * 24 * 60 * 60 * 1000);
+          let removed = 0;
+          
+          Object.keys(items).forEach(id => {
+            if (items[id].timestamp < cutoff) {
+              delete items[id];
+              removed++;
+            }
+          });
+          
+          localStorage.setItem(this.ITEMS_KEY, JSON.stringify(items));
+          console.log(`Cleared ${removed} old items`);
+          this.updateMetadata();
+        } catch (error) {
+          console.warn('Failed to clear old items:', error);
+        }
+      }
+
+      updateMetadata() {
+        try {
+          const items = this.getAllItems();
+          const metadata = {
+            count: Object.keys(items).length,
+            lastUpdated: Date.now()
+          };
+          localStorage.setItem(this.METADATA_KEY, JSON.stringify(metadata));
+        } catch (error) {
+          console.warn('Failed to update metadata:', error);
+        }
+      }
+
+      getMetadata() {
+        try {
+          const data = localStorage.getItem(this.METADATA_KEY);
+          return data ? JSON.parse(data) : { count: 0, lastUpdated: null };
+        } catch (error) {
+          return { count: 0, lastUpdated: null };
+        }
+      }
+
+      clearAll() {
+        try {
+          localStorage.removeItem(this.ITEMS_KEY);
+          localStorage.removeItem(this.METADATA_KEY);
+          console.log('Cleared all cached items');
+        } catch (error) {
+          console.warn('Failed to clear storage:', error);
+        }
+      }
+    }
+
+    const storage = new StorageManager();
+    const memoryCache = new Map();
+    const pendingFetches = new Map();
+
+    // Utilities
+    const formatTimeAgo = (timestamp) => {
+      const minutes = Math.floor((Date.now() - timestamp * 1000) / 60000);
+      if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+      const days = Math.floor(hours / 24);
+      return `${days} day${days === 1 ? '' : 's'} ago`;
+    };
+
+    const extractDomain = (url) => {
+      try {
+        return new URL(url).hostname.replace(/^www\./, '');
+      } catch {
+        return '';
+      }
+    };
+
+    const fetchItem = async (id) => {
+      if (memoryCache.has(id)) {
+        return memoryCache.get(id);
+      }
+
+      const cachedData = storage.getItem(id);
+      if (cachedData) {
+        memoryCache.set(id, cachedData);
+        return cachedData;
+      }
+
+      if (pendingFetches.has(id)) {
+        return pendingFetches.get(id);
+      }
+
+      const fetchPromise = (async () => {
+        const reference = ref(db, `v0/item/${id}`);
+        let retries = 0;
+        const maxRetries = 5;
+
+        while (retries < maxRetries) {
+          try {
+            const snapshot = await get(reference);
+            const data = snapshot.val();
+            
+            if (data !== null) {
+              memoryCache.set(id, data);
+              storage.saveItem(id, data);
+              return data;
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 200 * Math.pow(2, retries)));
+            retries++;
+          } catch (error) {
+            console.error(`Error fetching item ${id}:`, error);
+            retries++;
+            if (retries >= maxRetries) throw error;
+          }
+        }
+        
+        throw new Error(`Failed to fetch item ${id} after ${maxRetries} retries`);
+      })();
+
+      pendingFetches.set(id, fetchPromise);
+      
+      try {
+        const result = await fetchPromise;
+        return result;
+      } finally {
+        pendingFetches.delete(id);
+      }
+    };
+
+    const processItem = (data) => {
+      const item = { ...data };
+      item.timeAgo = formatTimeAgo(data.time);
+      if (data.url) {
+        item.domain = extractDomain(data.url);
+      }
+      return item;
+    };
+
+    // Initialize Datastar store
+    const store = window.store = {
+      items: [],
+      maxItemId: 0,
+      displayedIds: {},
+      cachedCount: storage.getMetadata().count,
+      loading: true,
+      error: '',
+      unloadedCount: 0
+    };
+
+    // Load cached items
+    const loadCachedItems = async () => {
+      const cachedIds = storage.getStoredItemIds();
+      if (cachedIds.length === 0) return [];
+
+      console.log(`Loading ${Math.min(200, cachedIds.length)} cached items`);
+      const idsToLoad = cachedIds.slice(0, 200);
+      const items = [];
+
+      for (const id of idsToLoad) {
+        if (!store.displayedIds[id]) {
+          try {
+            const data = await fetchItem(id);
+            if (data) {
+              items.push(processItem(data));
+              store.displayedIds[id] = true;
+            }
+          } catch (error) {
+            console.error(`Failed to load cached item ${id}:`, error);
+          }
+        }
+      }
+
+      return items;
+    };
+
+    // Update unloaded count
+    const updateUnloadedCount = () => {
+      const cachedIds = storage.getStoredItemIds();
+      const unloaded = cachedIds.filter(id => !store.displayedIds[id]);
+      store.unloadedCount = unloaded.length;
+    };
+
+    // Load more items function
+    window.loadMoreItems = async () => {
+      const cachedIds = storage.getStoredItemIds();
+      const unloadedIds = cachedIds.filter(id => !store.displayedIds[id]);
+      
+      if (unloadedIds.length === 0) return;
+
+      const batchSize = 50;
+      const idsToLoad = unloadedIds.slice(0, batchSize);
+      const newItems = [];
+
+      for (const id of idsToLoad) {
+        try {
+          const data = await fetchItem(id);
+          if (data) {
+            newItems.push(processItem(data));
+            store.displayedIds[id] = true;
+          }
+        } catch (error) {
+          console.error(`Failed to load item ${id}:`, error);
+        }
+      }
+
+      store.items = [...store.items, ...newItems];
+      updateUnloadedCount();
+    };
+
+    // Listen for new items
+    let isInitialLoad = true;
+    
+    onValue(ref(db, 'v0/maxitem'), async (snapshot) => {
+      try {
+        const newMaxItem = snapshot.val();
+        
+        if (!newMaxItem || isNaN(newMaxItem)) {
+          console.error('Invalid maxitem value:', newMaxItem);
+          return;
+        }
+
+        if (isInitialLoad) {
+          const cachedItems = await loadCachedItems();
+          store.items = cachedItems;
+          
+          const previousMax = newMaxItem - 50;
+          store.maxItemId = newMaxItem;
+          isInitialLoad = false;
+          store.loading = false;
+
+          console.log(`Loading ${newMaxItem - previousMax} recent items`);
+
+          await new Promise(resolve => setTimeout(resolve, 300));
+
+          const newItems = [];
+          for (let i = previousMax + 1; i <= newMaxItem; i++) {
+            if (!store.displayedIds[i]) {
+              try {
+                const data = await fetchItem(i);
+                if (data) {
+                  newItems.push(processItem(data));
+                  store.displayedIds[i] = true;
+                }
+              } catch (error) {
+                console.error(`Failed to load item ${i}:`, error);
+              }
+            }
+          }
+          
+          store.items = [...newItems, ...store.items];
+          store.cachedCount = storage.getMetadata().count;
+          updateUnloadedCount();
+        } else {
+          const previousMax = store.maxItemId;
+          store.maxItemId = newMaxItem;
+
+          const itemsToLoad = newMaxItem - previousMax;
+          if (itemsToLoad > 0) {
+            console.log(`Loading ${itemsToLoad} new item${itemsToLoad === 1 ? '' : 's'}`);
+
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            const newItems = [];
+            for (let i = previousMax + 1; i <= newMaxItem; i++) {
+              if (!store.displayedIds[i]) {
+                try {
+                  const data = await fetchItem(i);
+                  if (data) {
+                    newItems.push(processItem(data));
+                    store.displayedIds[i] = true;
+                  }
+                } catch (error) {
+                  console.error(`Failed to load item ${i}:`, error);
+                }
+              }
+            }
+            
+            store.items = [...newItems, ...store.items];
+            store.cachedCount = storage.getMetadata().count;
+          }
+        }
+      } catch (error) {
+        console.error('Error processing new items:', error);
+        store.error = 'Error loading new items. Please refresh the page.';
+      }
+    }, (error) => {
+      console.error('Firebase connection error:', error);
+      
+      if (isInitialLoad) {
+        loadCachedItems().then(items => {
+          store.items = items;
+          isInitialLoad = false;
+          store.loading = false;
+          updateUnloadedCount();
+        });
+      }
+      
+      store.error = 'Connection error. Showing cached items. Please check your internet connection.';
+    });
+
+    // Expose clear cache function
+    window.clearHNCache = () => {
+      storage.clearAll();
+      store.cachedCount = 0;
+      console.log('Cache cleared. Refresh to reload.');
+    };
+
+    // Cleanup
+    window.addEventListener('beforeunload', () => {
+      memoryCache.clear();
+      pendingFetches.clear();
+    });
+  </script>
+</body>
+</html>
