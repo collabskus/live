@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Live | Hacker News</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Real-time Hacker News feed">
+  <link rel="icon" href="https://news.ycombinator.com/y18.svg">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Verdana, Geneva, sans-serif;
+      font-size: 10pt;
+      margin: 0;
+      padding: 0;
+      background-color: #f6f6ef;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+    
+    #main {
+      max-width: 85%;
+      width: 796px;
+      margin: 0 auto;
+      background-color: #f6f6ef;
+      padding-bottom: 3px;
+      min-height: 100vh;
+    }
+
+    @media (max-width: 900px) {
+      #main {
+        width: 100%;
+        max-width: 100%;
+      }
+    }
+
+    header {
+      background-color: #ff6600;
+      padding: 2px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    header > * {
+      white-space: nowrap;
+    }
+
+    .logo {
+      width: 18px;
+      height: 18px;
+      border: 1px white solid;
+      margin-right: 1px;
+      display: block;
+    }
+
+    header a.current {
+      color: white;
+    }
+
+    .header-right {
+      margin-left: auto;
+      margin-right: 2px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .cache-info {
+      font-size: 8pt;
+      color: white;
+      opacity: 0.9;
+    }
+
+    .load-more-container {
+      text-align: center;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .load-more-btn {
+      background-color: #ff6600;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      font-size: 9pt;
+      font-family: Verdana, Geneva, sans-serif;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+
+    .load-more-btn:hover {
+      background-color: #ff7700;
+    }
+
+    .load-more-btn:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    main {
+      animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #828282;
+      font-size: 9pt;
+    }
+
+    .error {
+      margin: 20px;
+      padding: 15px;
+      background-color: #ffe0e0;
+      border: 1px solid #ff6b6b;
+      border-radius: 4px;
+      color: #c92a2a;
+      font-size: 9pt;
+    }
+
+    noscript {
+      display: block;
+      margin: 20px;
+      padding: 15px;
+      background-color: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="main">
+    <header>
+      <img src="https://news.ycombinator.com/y18.svg" class="logo" alt="Y">
+      <b><a href="https://news.ycombinator.com/news">Hacker News</a></b>
+      <a href="https://news.ycombinator.com/newest">new</a> |
+      <a href="https://news.ycombinator.com/threads">threads</a> |
+      <a href="https://news.ycombinator.com/front">past</a> |
+      <a href="https://news.ycombinator.com/newcomments">comments</a> |
+      <a href="https://news.ycombinator.com/ask">ask</a> |
+      <a href="https://news.ycombinator.com/show">show</a> |
+      <a href="https://news.ycombinator.com/jobs">jobs</a> |
+      <a href="https://news.ycombinator.com/submit">submit</a> |
+      <a href="#" class="current">live</a>
+      <span class="header-right">
+        <span class="cache-info" id="cache-info"></span>
+        <a href="https://github.com/jerbear2008/hn-live" target="_blank" rel="noopener">repo</a>
+      </span>
+    </header>
+    <noscript>This feed requires JavaScript to load.</noscript>
+    <main role="main" aria-live="polite" aria-label="Live feed"></main>
+    <div class="load-more-container">
+      <button class="load-more-btn" id="load-more-btn">Load More</button>
+    </div>
+  </div>
+
+  <template id="comment-template">
+    <article class="comment">
+      <img class="comment-upvote" src="https://news.ycombinator.com/triangle.svg" alt="upvote" width="10" height="10">
+      <div class="comment-content">
+        <div class="comment-header">
+          <a class="comment-user" rel="nofollow"></a>
+          <a class="comment-time"></a>
+          <span class="separator">|</span>
+          <a class="comment-parent">parent</a>
+        </div>
+        <div class="comment-body"></div>
+      </div>
+    </article>
+    <style>
+      .comment {
+        margin: 0 8px 20px 8px;
+        font-size: 9pt;
+        display: flex;
+        align-items: flex-start;
+        padding-right: 20px;
+        animation: slideIn 0.4s ease-out;
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .comment-upvote {
+        flex-shrink: 0;
+        margin-right: 7px;
+        margin-top: 1px;
+      }
+
+      .comment-content {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .comment-header {
+        font-size: 8pt;
+        color: #828282;
+        margin-bottom: 6px;
+      }
+
+      .comment-header .separator {
+        margin: 0 3px;
+      }
+
+      .comment-body {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+
+      .comment-body a:visited {
+        color: #828282;
+      }
+
+      .comment-body p {
+        margin: 8px 0 0 0;
+      }
+
+      .comment-body p:last-child {
+        margin-bottom: 0;
+      }
+    </style>
+  </template>
+  
+  <template id="story-template">
+    <article class="story">
+      <img class="story-upvote" src="https://news.ycombinator.com/triangle.svg" alt="upvote" width="10" height="10">
+      <div class="story-content">
+        <div class="story-titleline">
+          <a class="story-title"></a>
+          <span class="story-domain-wrapper">(<a class="story-domain" rel="nofollow"></a>)</span>
+        </div>
+        <div class="story-subline">
+          <span class="story-points"></span>
+          <span class="by-text">by</span>
+          <a class="story-user" rel="nofollow"></a>
+          <a class="story-time"></a>
+          <span class="separator">|</span>
+          <a class="story-past">past</a>
+          <span class="separator">|</span>
+          <a class="story-comments"></a>
+        </div>
+      </div>
+    </article>
+    <style>
+      .story {
+        margin: 0 9px 20px 9px;
+        font-size: 10pt;
+        display: flex;
+        align-items: flex-start;
+        padding-right: 20px;
+        animation: slideIn 0.4s ease-out;
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .story-upvote {
+        flex-shrink: 0;
+        margin-right: 7px;
+        margin-top: 1px;
+      }
+
+      .story-content {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .story-titleline {
+        margin-bottom: 5px;
+      }
+
+      .story-title {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+
+      .story-title:visited {
+        color: #828282;
+      }
+
+      .story-domain-wrapper {
+        color: #828282;
+        font-size: 8pt;
+        margin-left: 3px;
+      }
+
+      .story-subline {
+        font-size: 7pt;
+        color: #828282;
+        margin-bottom: 6px;
+      }
+
+      .story-subline .separator {
+        margin: 0 3px;
+      }
+
+      .story-subline .by-text {
+        margin: 0 3px;
+      }
+    </style>
+  </template>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.9.3/firebase-app.js';
+    import { getDatabase, ref, onValue, get } from 'https://www.gstatic.com/firebasejs/9.9.3/firebase-database.js';
+    
+    // Initialize Firebase
+    const app = initializeApp({
+      databaseURL: 'https://hacker-news.firebaseio.com',
+    });
+    const db = getDatabase(app);
+
+    // LocalStorage Manager
+    class StorageManager {
+      constructor() {
+        this.ITEMS_KEY = 'hn_live_items';
+        this.METADATA_KEY = 'hn_live_metadata';
+        this.MAX_ITEMS = 1000; // Store up to 1000 items
+        this.MAX_AGE_DAYS = 7; // Keep items for 7 days
+      }
+
+      saveItem(id, data) {
+        try {
+          const items = this.getAllItems();
+          items[id] = {
+            data,
+            timestamp: Date.now()
+          };
+          
+          // Clean old items if we're over the limit
+          this.cleanOldItems(items);
+          
+          localStorage.setItem(this.ITEMS_KEY, JSON.stringify(items));
+          this.updateMetadata();
+        } catch (error) {
+          console.warn('Failed to save to localStorage:', error);
+          // If storage is full, clear old items and try again
+          if (error.name === 'QuotaExceededError') {
+            this.clearOldItems(30); // Clear items older than 30 days
+            try {
+              const items = this.getAllItems();
+              items[id] = { data, timestamp: Date.now() };
+              localStorage.setItem(this.ITEMS_KEY, JSON.stringify(items));
+            } catch (e) {
+              console.error('Still failed after cleanup:', e);
+            }
+          }
+        }
+      }
+
+      getItem(id) {
+        try {
+          const items = this.getAllItems();
+          const item = items[id];
+          if (!item) return null;
+          
+          // Check if item is too old
+          const ageInDays = (Date.now() - item.timestamp) / (1000 * 60 * 60 * 24);
+          if (ageInDays > this.MAX_AGE_DAYS) {
+            delete items[id];
+            localStorage.setItem(this.ITEMS_KEY, JSON.stringify(items));
+            return null;
+          }
+          
+          return item.data;
+        } catch (error) {
+          console.warn('Failed to read from localStorage:', error);
+          return null;
+        }
+      }
+
+      getAllItems() {
+        try {
+          const data = localStorage.getItem(this.ITEMS_KEY);
+          return data ? JSON.parse(data) : {};
+        } catch (error) {
+          console.warn('Failed to parse localStorage:', error);
+          return {};
+        }
+      }
+
+      getStoredItemIds() {
+        const items = this.getAllItems();
+        return Object.keys(items).map(Number).sort((a, b) => b - a);
+      }
+
+      cleanOldItems(items) {
+        const entries = Object.entries(items);
+        
+        // Remove items older than MAX_AGE_DAYS
+        const maxAge = this.MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        const validEntries = entries.filter(([_, item]) => 
+          (now - item.timestamp) < maxAge
+        );
+        
+        // If still over limit, keep only the newest items
+        if (validEntries.length > this.MAX_ITEMS) {
+          validEntries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+          validEntries.splice(this.MAX_ITEMS);
+        }
+        
+        // Rebuild items object
+        const cleanedItems = {};
+        for (const [id, item] of validEntries) {
+          cleanedItems[id] = item;
+        }
+        
+        // Replace in items parameter
+        Object.keys(items).forEach(key => delete items[key]);
+        Object.assign(items, cleanedItems);
+      }
+
+      clearOldItems(daysOld) {
+        try {
+          const items = this.getAllItems();
+          const cutoff = Date.now() - (daysOld * 24 * 60 * 60 * 1000);
+          let removed = 0;
+          
+          Object.keys(items).forEach(id => {
+            if (items[id].timestamp < cutoff) {
+              delete items[id];
+              removed++;
+            }
+          });
+          
+          localStorage.setItem(this.ITEMS_KEY, JSON.stringify(items));
+          console.log(`Cleared ${removed} old items`);
+          this.updateMetadata();
+        } catch (error) {
+          console.warn('Failed to clear old items:', error);
+        }
+      }
+
+      updateMetadata() {
+        try {
+          const items = this.getAllItems();
+          const metadata = {
+            count: Object.keys(items).length,
+            lastUpdated: Date.now()
+          };
+          localStorage.setItem(this.METADATA_KEY, JSON.stringify(metadata));
+        } catch (error) {
+          console.warn('Failed to update metadata:', error);
+        }
+      }
+
+      getMetadata() {
+        try {
+          const data = localStorage.getItem(this.METADATA_KEY);
+          return data ? JSON.parse(data) : { count: 0, lastUpdated: null };
+        } catch (error) {
+          return { count: 0, lastUpdated: null };
+        }
+      }
+
+      clearAll() {
+        try {
+          localStorage.removeItem(this.ITEMS_KEY);
+          localStorage.removeItem(this.METADATA_KEY);
+          console.log('Cleared all cached items');
+        } catch (error) {
+          console.warn('Failed to clear storage:', error);
+        }
+      }
+    }
+
+    const storage = new StorageManager();
+
+    // Update cache info display
+    const updateCacheInfo = () => {
+      const metadata = storage.getMetadata();
+      const cacheInfo = document.getElementById('cache-info');
+      if (cacheInfo && metadata.count > 0) {
+        cacheInfo.textContent = `${metadata.count} cached`;
+      }
+    };
+
+    // Utility functions
+    const formatTimeAgo = (timestamp) => {
+      const minutes = Math.floor((Date.now() - timestamp * 1000) / 60000);
+      if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+      const days = Math.floor(hours / 24);
+      return `${days} day${days === 1 ? '' : 's'} ago`;
+    };
+
+    const sanitizeHTML = (html) => {
+      const template = document.createElement('template');
+      template.innerHTML = html.trim();
+      return template.content;
+    };
+
+    const extractDomain = (url) => {
+      try {
+        return new URL(url).hostname.replace(/^www\./, '');
+      } catch {
+        return '';
+      }
+    };
+
+    // Item cache (in-memory for current session + localStorage for persistence)
+    const memoryCache = new Map();
+    const pendingFetches = new Map();
+
+    // Fetch item data with caching
+    const fetchItem = async (id) => {
+      // Check memory cache first
+      if (memoryCache.has(id)) {
+        return memoryCache.get(id);
+      }
+
+      // Check localStorage
+      const cachedData = storage.getItem(id);
+      if (cachedData) {
+        memoryCache.set(id, cachedData);
+        return cachedData;
+      }
+
+      // Check if already fetching
+      if (pendingFetches.has(id)) {
+        return pendingFetches.get(id);
+      }
+
+      const fetchPromise = (async () => {
+        const reference = ref(db, `v0/item/${id}`);
+        let retries = 0;
+        const maxRetries = 5;
+
+        while (retries < maxRetries) {
+          try {
+            const snapshot = await get(reference);
+            const data = snapshot.val();
+            
+            if (data !== null) {
+              memoryCache.set(id, data);
+              storage.saveItem(id, data);
+              updateCacheInfo();
+              return data;
+            }
+            
+            // Exponential backoff
+            await new Promise(resolve => setTimeout(resolve, 200 * Math.pow(2, retries)));
+            retries++;
+          } catch (error) {
+            console.error(`Error fetching item ${id}:`, error);
+            retries++;
+            if (retries >= maxRetries) throw error;
+          }
+        }
+        
+        throw new Error(`Failed to fetch item ${id} after ${maxRetries} retries`);
+      })();
+
+      pendingFetches.set(id, fetchPromise);
+      
+      try {
+        const result = await fetchPromise;
+        return result;
+      } finally {
+        pendingFetches.delete(id);
+      }
+    };
+
+    // Custom element for HN items
+    class HNItemElement extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        this._id = null;
+        this._abortController = null;
+      }
+
+      static get observedAttributes() {
+        return ['item-id'];
+      }
+
+      get itemId() {
+        return this._id;
+      }
+
+      set itemId(value) {
+        const id = Number(value);
+        if (isNaN(id) || id === this._id) return;
+        
+        this._id = id;
+        this.setAttribute('item-id', String(id));
+        this.load();
+      }
+
+      attributeChangedCallback(name, oldValue, newValue) {
+        if (name === 'item-id' && newValue !== String(this._id)) {
+          this.itemId = newValue;
+        }
+      }
+
+      connectedCallback() {
+        if (this._id && this.shadowRoot.children.length === 0) {
+          this.load();
+        }
+      }
+
+      disconnectedCallback() {
+        if (this._abortController) {
+          this._abortController.abort();
+        }
+      }
+
+      async load() {
+        if (!this._id) return;
+
+        if (this._abortController) {
+          this._abortController.abort();
+        }
+
+        this._abortController = new AbortController();
+        const { signal } = this._abortController;
+
+        try {
+          const data = await fetchItem(this._id);
+          
+          if (signal.aborted) return;
+
+          // For cached/older items, show immediately
+          // For new items, wait 30 seconds after post time
+          const itemAge = Date.now() - (data.time * 1000);
+          const isRecentItem = itemAge < 60000; // Less than 1 minute old
+          
+          if (isRecentItem) {
+            const targetTime = (data.time * 1000) + 30000;
+            const delay = Math.max(0, targetTime - Date.now());
+            
+            if (delay > 0) {
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+          }
+
+          if (signal.aborted) return;
+
+          switch (data.type) {
+            case 'comment':
+            case 'pollopt':
+              this.renderComment(data);
+              break;
+            case 'story':
+            case 'ask':
+            case 'job':
+            case 'poll':
+              this.renderStory(data);
+              break;
+            default:
+              console.warn(`Unknown item type: ${data.type}`, data);
+          }
+        } catch (error) {
+          if (error.name !== 'AbortError') {
+            console.error(`Failed to load item ${this._id}:`, error);
+          }
+        } finally {
+          this._abortController = null;
+        }
+      }
+
+      renderComment(data) {
+        const template = document.getElementById('comment-template').content.cloneNode(true);
+        
+        const userLink = template.querySelector('.comment-user');
+        userLink.textContent = data.by || '[deleted]';
+        userLink.href = `https://news.ycombinator.com/user?id=${data.by}`;
+        
+        const timeLink = template.querySelector('.comment-time');
+        timeLink.textContent = formatTimeAgo(data.time);
+        timeLink.href = `https://news.ycombinator.com/item?id=${data.id}`;
+        
+        const parentLink = template.querySelector('.comment-parent');
+        parentLink.href = `https://news.ycombinator.com/item?id=${data.parent}`;
+        
+        const bodyElement = template.querySelector('.comment-body');
+        if (data.text) {
+          const sanitized = sanitizeHTML(data.text);
+          bodyElement.appendChild(sanitized);
+        } else {
+          bodyElement.textContent = '[deleted]';
+        }
+
+        this.shadowRoot.innerHTML = '';
+        this.shadowRoot.appendChild(template);
+      }
+
+      renderStory(data) {
+        const template = document.getElementById('story-template').content.cloneNode(true);
+        const hasUrl = data.url && data.url.trim().length > 0;
+        
+        const titleLink = template.querySelector('.story-title');
+        titleLink.textContent = data.dead ? '[dead]' : (data.title || '[no title]');
+        if (hasUrl) {
+          titleLink.href = data.url;
+        } else {
+          titleLink.href = `https://news.ycombinator.com/item?id=${data.id}`;
+        }
+        
+        const domainWrapper = template.querySelector('.story-domain-wrapper');
+        const domainLink = template.querySelector('.story-domain');
+        if (hasUrl) {
+          const domain = extractDomain(data.url);
+          domainLink.textContent = domain;
+          domainLink.href = `https://news.ycombinator.com/from?site=${encodeURIComponent(domain)}`;
+        } else {
+          domainWrapper.remove();
+        }
+        
+        const pointsElement = template.querySelector('.story-points');
+        const score = data.score || 0;
+        pointsElement.textContent = `${score} point${score === 1 ? '' : 's'}`;
+
+        const userLink = template.querySelector('.story-user');
+        userLink.textContent = data.by || '[deleted]';
+        userLink.href = `https://news.ycombinator.com/user?id=${data.by}`;
+
+        const timeLink = template.querySelector('.story-time');
+        timeLink.textContent = formatTimeAgo(data.time);
+        timeLink.href = `https://news.ycombinator.com/item?id=${data.id}`;
+        
+        const pastLink = template.querySelector('.story-past');
+        if (hasUrl && data.title) {
+          pastLink.href = `https://hn.algolia.com/?query=${encodeURIComponent(data.title)}&type=story&dateRange=all&sort=byDate&storyText=false&prefix&page=0`;
+        } else {
+          pastLink.previousElementSibling?.remove();
+          pastLink.remove();
+        }
+
+        const commentsLink = template.querySelector('.story-comments');
+        const commentCount = (data.kids || []).length;
+        commentsLink.href = `https://news.ycombinator.com/item?id=${data.id}`;
+        commentsLink.textContent = `${commentCount} comment${commentCount === 1 ? '' : 's'}`;
+
+        this.shadowRoot.innerHTML = '';
+        this.shadowRoot.appendChild(template);
+      }
+    }
+
+    customElements.define('hn-item', HNItemElement);
+
+    // Main feed logic
+    const itemContainer = document.querySelector('main');
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    let maxItemId = null;
+    let isInitialLoad = true;
+    let displayedItemIds = new Set();
+
+    const createItemElement = (id) => {
+      const element = document.createElement('hn-item');
+      element.itemId = id;
+      displayedItemIds.add(id);
+      return element;
+    };
+
+    // Load items from localStorage on startup
+    const loadCachedItems = () => {
+      const cachedIds = storage.getStoredItemIds();
+      if (cachedIds.length === 0) return;
+
+      console.log(`Loading ${Math.min(200, cachedIds.length)} cached items`);
+      const fragment = document.createDocumentFragment();
+      
+      // Load most recent 200 cached items
+      const idsToLoad = cachedIds.slice(0, 200);
+      for (const id of idsToLoad) {
+        if (!displayedItemIds.has(id)) {
+          fragment.appendChild(createItemElement(id));
+        }
+      }
+      
+      itemContainer.appendChild(fragment);
+      updateCacheInfo();
+    };
+
+    // Load more old items
+    const loadMoreItems = () => {
+      const cachedIds = storage.getStoredItemIds();
+      const unloadedIds = cachedIds.filter(id => !displayedItemIds.has(id));
+      
+      if (unloadedIds.length === 0) {
+        loadMoreBtn.textContent = 'No more cached items';
+        loadMoreBtn.disabled = true;
+        return;
+      }
+
+      const fragment = document.createDocumentFragment();
+      const batchSize = 50;
+      const idsToLoad = unloadedIds.slice(0, batchSize);
+      
+      for (const id of idsToLoad) {
+        fragment.appendChild(createItemElement(id));
+      }
+      
+      itemContainer.appendChild(fragment);
+      
+      const remaining = unloadedIds.length - batchSize;
+      if (remaining <= 0) {
+        loadMoreBtn.textContent = 'No more cached items';
+        loadMoreBtn.disabled = true;
+      } else {
+        loadMoreBtn.textContent = `Load More (${remaining} cached)`;
+      }
+    };
+
+    loadMoreBtn.addEventListener('click', loadMoreItems);
+
+    // Listen for new items
+    onValue(ref(db, 'v0/maxitem'), async (snapshot) => {
+      try {
+        const newMaxItem = snapshot.val();
+        
+        if (!newMaxItem || isNaN(newMaxItem)) {
+          console.error('Invalid maxitem value:', newMaxItem);
+          return;
+        }
+
+        if (isInitialLoad) {
+          // On first load, show cached items first
+          loadCachedItems();
+          
+          const previousMax = newMaxItem - 50; // Load last 50 new items
+          maxItemId = newMaxItem;
+          isInitialLoad = false;
+          
+          const loadingMsg = document.querySelector('.loading');
+          if (loadingMsg) loadingMsg.remove();
+
+          console.log(`Loading ${newMaxItem - previousMax} recent items`);
+
+          await new Promise(resolve => setTimeout(resolve, 300));
+
+          const fragment = document.createDocumentFragment();
+          for (let i = previousMax + 1; i <= newMaxItem; i++) {
+            if (!displayedItemIds.has(i)) {
+              fragment.appendChild(createItemElement(i));
+            }
+          }
+          
+          itemContainer.insertBefore(fragment, itemContainer.firstChild);
+          
+          // Update load more button
+          const cachedIds = storage.getStoredItemIds();
+          const unloadedCount = cachedIds.filter(id => !displayedItemIds.has(id)).length;
+          if (unloadedCount > 0) {
+            loadMoreBtn.textContent = `Load More (${unloadedCount} cached)`;
+            loadMoreBtn.disabled = false;
+          }
+        } else {
+          // Normal incremental updates
+          const previousMax = maxItemId;
+          maxItemId = newMaxItem;
+
+          const itemsToLoad = newMaxItem - previousMax;
+          if (itemsToLoad > 0) {
+            console.log(`Loading ${itemsToLoad} new item${itemsToLoad === 1 ? '' : 's'}`);
+
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            const fragment = document.createDocumentFragment();
+            const batchSize = 10;
+            
+            for (let i = previousMax + 1; i <= newMaxItem; i++) {
+              if (!displayedItemIds.has(i)) {
+                fragment.appendChild(createItemElement(i));
+              }
+              
+              if ((i - previousMax) % batchSize === 0) {
+                itemContainer.insertBefore(fragment, itemContainer.firstChild);
+                await new Promise(resolve => setTimeout(resolve, 50));
+              }
+            }
+            
+            if (fragment.hasChildNodes()) {
+              itemContainer.insertBefore(fragment, itemContainer.firstChild);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error processing new items:', error);
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error';
+        errorDiv.textContent = 'Error loading new items. Please refresh the page.';
+        itemContainer.insertBefore(errorDiv, itemContainer.firstChild);
+      }
+    }, (error) => {
+      console.error('Firebase connection error:', error);
+      
+      // Even on error, try to show cached items
+      if (isInitialLoad) {
+        loadCachedItems();
+        isInitialLoad = false;
+        const loadingMsg = document.querySelector('.loading');
+        if (loadingMsg) loadingMsg.remove();
+      }
+      
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error';
+      errorDiv.textContent = 'Connection error. Showing cached items. Please check your internet connection.';
+      itemContainer.insertBefore(errorDiv, itemContainer.firstChild);
+    });
+
+    // Show loading message initially
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading';
+    loadingDiv.textContent = 'Loading live feed...';
+    itemContainer.appendChild(loadingDiv);
+
+    // Initial cache info update
+    updateCacheInfo();
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      memoryCache.clear();
+      pendingFetches.clear();
+    });
+
+    // Expose clear cache function for debugging
+    window.clearHNCache = () => {
+      storage.clearAll();
+      updateCacheInfo();
+      console.log('Cache cleared. Refresh to reload.');
+    };
+
+  </script>
+</body>
+</html>
