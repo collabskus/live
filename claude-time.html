@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kathmandu Calendar & Time</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            font-size: 1rem;
+            opacity: 0.8;
+            font-weight: 300;
+        }
+
+        .time-display {
+            text-align: center;
+            margin: 40px 0;
+        }
+
+        .time {
+            font-size: 4rem;
+            font-weight: 200;
+            letter-spacing: 3px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .time-nepali {
+            font-size: 2rem;
+            opacity: 0.8;
+            margin-top: 10px;
+            font-weight: 300;
+        }
+
+        .date-display {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .date-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .date-card .label {
+            font-size: 0.9rem;
+            opacity: 0.7;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .date-card .value {
+            font-size: 1.5rem;
+            font-weight: 500;
+        }
+
+        .moon-display {
+            text-align: center;
+            margin: 30px 0;
+            padding: 25px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .moon-icon {
+            font-size: 4rem;
+            margin: 15px 0;
+            filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.5));
+        }
+
+        .moon-phase-name {
+            font-size: 1.3rem;
+            margin-top: 10px;
+            font-weight: 300;
+        }
+
+        .moon-illumination {
+            font-size: 1rem;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+
+        .calendar-grid {
+            margin-top: 30px;
+        }
+
+        .calendar-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .calendar-header .day-name {
+            text-align: center;
+            font-size: 0.8rem;
+            padding: 8px;
+            opacity: 0.7;
+            font-weight: 500;
+        }
+
+        .calendar-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+        }
+
+        .calendar-day {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            font-size: 0.9rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .calendar-day.pre,
+        .calendar-day.next {
+            opacity: 0.3;
+        }
+
+        .calendar-day.today {
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+            transform: scale(1.05);
+        }
+
+        .calendar-day .bs-date {
+            font-size: 1rem;
+            margin-bottom: 2px;
+        }
+
+        .calendar-day .ad-date {
+            font-size: 0.7rem;
+            opacity: 0.6;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 0.8rem;
+            opacity: 0.6;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 1.2rem;
+            opacity: 0.8;
+        }
+
+        .error {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid rgba(255, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 25px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .time {
+                font-size: 3rem;
+            }
+
+            .time-nepali {
+                font-size: 1.5rem;
+            }
+
+            .date-display {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .calendar-day {
+                padding: 8px 5px;
+                font-size: 0.8rem;
+            }
+
+            .calendar-day .bs-date {
+                font-size: 0.9rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .time {
+                font-size: 2.5rem;
+            }
+
+            .calendar-day {
+                padding: 5px 3px;
+            }
+
+            .calendar-day .bs-date {
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>काठमाडौं</h1>
+            <div class="subtitle">Kathmandu, Nepal</div>
+        </div>
+
+        <div id="app">
+            <div class="loading">Loading...</div>
+        </div>
+
+        <div class="footer">
+            Last updated: <span id="lastUpdate">--</span>
+        </div>
+    </div>
+
+    <script>
+        const API_URLS = {
+            today: 'https://calendar.bloggernepal.com/api/today',
+            time: 'https://calendar.bloggernepal.com/api/time',
+            moon: 'https://aa.usno.navy.mil/api/rstt/oneday'
+        };
+
+        const REFRESH_INTERVALS = {
+            time: 60 * 60 * 1000, // 1 hour
+            today: 24 * 60 * 60 * 1000, // 24 hours
+            moon: 6 * 60 * 60 * 1000, // 6 hours
+            clock: 1000 // 1 second for local clock
+        };
+
+        const KATHMANDU = {
+            lat: 27.7172,
+            lon: 85.3240,
+            tz: 'Asia/Kathmandu',
+            tzOffset: 345 // Nepal is UTC+5:45
+        };
+
+        let state = {
+            todayData: null,
+            timeData: null,
+            moonData: null,
+            serverTimeOffset: 0,
+            lastTimeSync: null
+        };
+
+        const moonPhases = [
+            { name: 'New Moon', icon: '🌑', range: [0, 3.75] },
+            { name: 'Waxing Crescent', icon: '🌒', range: [3.75, 11.25] },
+            { name: 'First Quarter', icon: '🌓', range: [11.25, 13.75] },
+            { name: 'Waxing Gibbous', icon: '🌔', range: [13.75, 21.25] },
+            { name: 'Full Moon', icon: '🌕', range: [21.25, 23.75] },
+            { name: 'Waning Gibbous', icon: '🌖', range: [23.75, 26.25] },
+            { name: 'Last Quarter', icon: '🌗', range: [26.25, 28.75] },
+            { name: 'Waning Crescent', icon: '🌘', range: [28.75, 30] }
+        ];
+
+        function getMoonPhase(age) {
+            for (let phase of moonPhases) {
+                if (age >= phase.range[0] && age < phase.range[1]) {
+                    return phase;
+                }
+            }
+            return moonPhases[0]; // Default to New Moon
+        }
+
+        async function fetchWithRetry(url, options = {}, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return await response.json();
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+                }
+            }
+        }
+
+        async function fetchTodayData() {
+            try {
+                state.todayData = await fetchWithRetry(API_URLS.today);
+                render();
+            } catch (error) {
+                console.error('Error fetching today data:', error);
+                showError('Failed to load calendar data');
+            }
+        }
+
+        async function fetchTimeData() {
+            try {
+                const beforeFetch = Date.now();
+                state.timeData = await fetchWithRetry(API_URLS.time);
+                const afterFetch = Date.now();
+                
+                // Calculate server time offset
+                const serverHour = parseInt(state.timeData.hour);
+                const serverMin = parseInt(state.timeData.min);
+                const serverSec = parseInt(state.timeData.sec);
+                const isPM = state.timeData.apOrPm === 'PM';
+                
+                let serverHour24 = serverHour;
+                if (isPM && serverHour !== 12) serverHour24 += 12;
+                if (!isPM && serverHour === 12) serverHour24 = 0;
+                
+                const serverTime = new Date();
+                serverTime.setHours(serverHour24, serverMin, serverSec, 0);
+                
+                const localTime = new Date((beforeFetch + afterFetch) / 2);
+                state.serverTimeOffset = serverTime.getTime() - localTime.getTime();
+                state.lastTimeSync = Date.now();
+                
+                render();
+            } catch (error) {
+                console.error('Error fetching time data:', error);
+                showError('Failed to load time data');
+            }
+        }
+
+        async function fetchMoonData() {
+            try {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                
+                const url = `${API_URLS.moon}?date=${year}-${month}-${day}&coords=${KATHMANDU.lat},${KATHMANDU.lon}&tz=${KATHMANDU.tzOffset}`;
+                
+                state.moonData = await fetchWithRetry(url, {
+                    headers: {
+                        'x-client-id': 'student-kathmandu-calendar'
+                    }
+                });
+                
+                render();
+            } catch (error) {
+                console.error('Error fetching moon data:', error);
+                // Don't show error for moon data, just skip it
+            }
+        }
+
+        function getCurrentKathmanduTime() {
+            const now = Date.now();
+            const kathmanduTime = new Date(now + state.serverTimeOffset);
+            return kathmanduTime;
+        }
+
+        function formatTime(date) {
+            let hours = date.getHours();
+            const minutes = date.getMinutes();
+            const seconds = date.getSeconds();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            
+            return {
+                hours: String(hours).padStart(2, '0'),
+                minutes: String(minutes).padStart(2, '0'),
+                seconds: String(seconds).padStart(2, '0'),
+                ampm: ampm
+            };
+        }
+
+        function toNepaliDigits(num) {
+            const nepaliDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
+            return String(num).split('').map(d => nepaliDigits[parseInt(d)] || d).join('');
+        }
+
+        function showError(message) {
+            const app = document.getElementById('app');
+            app.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            
+            if (!state.todayData || !state.timeData) {
+                return;
+            }
+
+            const time = getCurrentKathmanduTime();
+            const formattedTime = formatTime(time);
+            
+            let moonHTML = '';
+            if (state.moonData && state.moonData.properties && state.moonData.properties.data) {
+                const moonInfo = state.moonData.properties.data;
+                const curphase = moonInfo.curphase || 'Unknown';
+                const fracillum = moonInfo.fracillum ? (parseFloat(moonInfo.fracillum) * 100).toFixed(0) : '0';
+                
+                // Try to get moon age if available
+                let moonIcon = '🌙';
+                let phaseName = curphase;
+                
+                // Map phase names to icons
+                const phaseMap = {
+                    'New Moon': '🌑',
+                    'Waxing Crescent': '🌒',
+                    'First Quarter': '🌓',
+                    'Waxing Gibbous': '🌔',
+                    'Full Moon': '🌕',
+                    'Waning Gibbous': '🌖',
+                    'Last Quarter': '🌗',
+                    'Waning Crescent': '🌘'
+                };
+                
+                moonIcon = phaseMap[curphase] || '🌙';
+                
+                moonHTML = `
+                    <div class="moon-display">
+                        <div class="label">MOON PHASE</div>
+                        <div class="moon-icon">${moonIcon}</div>
+                        <div class="moon-phase-name">${phaseName}</div>
+                        <div class="moon-illumination">${fracillum}% Illuminated</div>
+                    </div>
+                `;
+            }
+
+            // Build calendar
+            const res = state.todayData.res;
+            const weekDays = res.weeksNeMini;
+            
+            let calendarHTML = `
+                <div class="calendar-grid">
+                    <div class="calendar-header">
+                        ${weekDays.map(day => `<div class="day-name">${day}</div>`).join('')}
+                    </div>
+                    <div class="calendar-days">
+                        ${res.days.map(day => `
+                            <div class="calendar-day ${day.tag || ''}">
+                                <div class="bs-date">${day.bs}</div>
+                                <div class="ad-date">${day.ad}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            app.innerHTML = `
+                <div class="time-display">
+                    <div class="time">${formattedTime.hours}:${formattedTime.minutes}:${formattedTime.seconds} <span style="font-size: 2rem;">${formattedTime.ampm}</span></div>
+                    <div class="time-nepali">${toNepaliDigits(formattedTime.hours)}:${toNepaliDigits(formattedTime.minutes)}:${toNepaliDigits(formattedTime.seconds)}</div>
+                </div>
+
+                <div class="date-display">
+                    <div class="date-card">
+                        <div class="label">Bikram Sambat</div>
+                        <div class="value">${res.name} ${res.year}</div>
+                    </div>
+                    <div class="date-card">
+                        <div class="label">Gregorian</div>
+                        <div class="value">${res.eng1}-${res.eng2} ${res.engYear}</div>
+                    </div>
+                </div>
+
+                ${moonHTML}
+
+                ${calendarHTML}
+            `;
+
+            updateLastUpdate();
+        }
+
+        function updateLastUpdate() {
+            const lastUpdate = document.getElementById('lastUpdate');
+            const now = new Date();
+            lastUpdate.textContent = now.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        function startClockUpdate() {
+            setInterval(() => {
+                if (state.todayData && state.timeData) {
+                    render();
+                }
+            }, REFRESH_INTERVALS.clock);
+        }
+
+        async function initialize() {
+            // Initial data fetch
+            await Promise.all([
+                fetchTodayData(),
+                fetchTimeData(),
+                fetchMoonData()
+            ]);
+
+            // Start clock
+            startClockUpdate();
+
+            // Schedule periodic updates
+            setInterval(fetchTimeData, REFRESH_INTERVALS.time);
+            setInterval(fetchTodayData, REFRESH_INTERVALS.today);
+            setInterval(fetchMoonData, REFRESH_INTERVALS.moon);
+        }
+
+        // Start the application
+        initialize();
+    </script>
+</body>
+</html>
