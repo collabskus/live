@@ -276,14 +276,12 @@
     <script>
         const API_URLS = {
             today: 'https://calendar.bloggernepal.com/api/today',
-            time: 'https://calendar.bloggernepal.com/api/time',
-            moon: 'https://aa.usno.navy.mil/api/rstt/oneday'
+            time: 'https://calendar.bloggernepal.com/api/time'
         };
 
         const REFRESH_INTERVALS = {
             time: 60 * 60 * 1000, // 1 hour
             today: 24 * 60 * 60 * 1000, // 24 hours
-            moon: 6 * 60 * 60 * 1000, // 6 hours
             clock: 1000 // 1 second for local clock
         };
 
@@ -291,35 +289,71 @@
             lat: 27.7172,
             lon: 85.3240,
             tz: 'Asia/Kathmandu',
-            tzOffset: 345 // Nepal is UTC+5:45
+            tzOffset: 5.75 // UTC+5:45 in hours
         };
 
         let state = {
             todayData: null,
             timeData: null,
-            moonData: null,
             serverTimeOffset: 0,
             lastTimeSync: null
         };
 
-        const moonPhases = [
-            { name: 'New Moon', icon: '🌑', range: [0, 3.75] },
-            { name: 'Waxing Crescent', icon: '🌒', range: [3.75, 11.25] },
-            { name: 'First Quarter', icon: '🌓', range: [11.25, 13.75] },
-            { name: 'Waxing Gibbous', icon: '🌔', range: [13.75, 21.25] },
-            { name: 'Full Moon', icon: '🌕', range: [21.25, 23.75] },
-            { name: 'Waning Gibbous', icon: '🌖', range: [23.75, 26.25] },
-            { name: 'Last Quarter', icon: '🌗', range: [26.25, 28.75] },
-            { name: 'Waning Crescent', icon: '🌘', range: [28.75, 30] }
-        ];
+        // Moon phase calculation using astronomical algorithms
+        function calculateMoonPhase(date) {
+            // Convert date to Julian Day Number
+            const year = date.getUTCFullYear();
+            const month = date.getUTCMonth() + 1;
+            const day = date.getUTCDate();
+            
+            let a = Math.floor((14 - month) / 12);
+            let y = year + 4800 - a;
+            let m = month + 12 * a - 3;
+            
+            let jdn = day + Math.floor((153 * m + 2) / 5) + 365 * y + 
+                      Math.floor(y / 4) - Math.floor(y / 100) + 
+                      Math.floor(y / 400) - 32045;
+            
+            // Calculate days since known new moon (January 6, 2000)
+            const knownNewMoon = 2451550.1;
+            const daysSinceNew = jdn - knownNewMoon;
+            
+            // Synodic month (new moon to new moon) is approximately 29.53059 days
+            const synodicMonth = 29.53058867;
+            
+            // Calculate moon age
+            const newMoons = daysSinceNew / synodicMonth;
+            const moonAge = (newMoons - Math.floor(newMoons)) * synodicMonth;
+            
+            // Calculate illumination (approximate)
+            const moonPhaseAngle = (moonAge / synodicMonth) * 2 * Math.PI;
+            const illumination = (1 - Math.cos(moonPhaseAngle)) / 2;
+            
+            return {
+                age: moonAge,
+                illumination: illumination,
+                phase: getMoonPhaseName(moonAge)
+            };
+        }
 
-        function getMoonPhase(age) {
-            for (let phase of moonPhases) {
-                if (age >= phase.range[0] && age < phase.range[1]) {
+        function getMoonPhaseName(age) {
+            const phases = [
+                { name: 'New Moon', icon: '🌑', min: 0, max: 1.84566 },
+                { name: 'Waxing Crescent', icon: '🌒', min: 1.84566, max: 5.53699 },
+                { name: 'First Quarter', icon: '🌓', min: 5.53699, max: 9.22831 },
+                { name: 'Waxing Gibbous', icon: '🌔', min: 9.22831, max: 12.91963 },
+                { name: 'Full Moon', icon: '🌕', min: 12.91963, max: 16.61096 },
+                { name: 'Waning Gibbous', icon: '🌖', min: 16.61096, max: 20.30228 },
+                { name: 'Last Quarter', icon: '🌗', min: 20.30228, max: 23.99361 },
+                { name: 'Waning Crescent', icon: '🌘', min: 23.99361, max: 29.53059 }
+            ];
+
+            for (let phase of phases) {
+                if (age >= phase.min && age < phase.max) {
                     return phase;
                 }
             }
-            return moonPhases[0]; // Default to New Moon
+            return phases[0];
         }
 
         async function fetchWithRetry(url, options = {}, retries = 3) {
@@ -375,28 +409,6 @@
             }
         }
 
-        async function fetchMoonData() {
-            try {
-                const now = new Date();
-                const year = now.getFullYear();
-                const month = String(now.getMonth() + 1).padStart(2, '0');
-                const day = String(now.getDate()).padStart(2, '0');
-                
-                const url = `${API_URLS.moon}?date=${year}-${month}-${day}&coords=${KATHMANDU.lat},${KATHMANDU.lon}&tz=${KATHMANDU.tzOffset}`;
-                
-                state.moonData = await fetchWithRetry(url, {
-                    headers: {
-                        'x-client-id': 'student-kathmandu-calendar'
-                    }
-                });
-                
-                render();
-            } catch (error) {
-                console.error('Error fetching moon data:', error);
-                // Don't show error for moon data, just skip it
-            }
-        }
-
         function getCurrentKathmanduTime() {
             const now = Date.now();
             const kathmanduTime = new Date(now + state.serverTimeOffset);
@@ -440,39 +452,16 @@
             const time = getCurrentKathmanduTime();
             const formattedTime = formatTime(time);
             
-            let moonHTML = '';
-            if (state.moonData && state.moonData.properties && state.moonData.properties.data) {
-                const moonInfo = state.moonData.properties.data;
-                const curphase = moonInfo.curphase || 'Unknown';
-                const fracillum = moonInfo.fracillum ? (parseFloat(moonInfo.fracillum) * 100).toFixed(0) : '0';
-                
-                // Try to get moon age if available
-                let moonIcon = '🌙';
-                let phaseName = curphase;
-                
-                // Map phase names to icons
-                const phaseMap = {
-                    'New Moon': '🌑',
-                    'Waxing Crescent': '🌒',
-                    'First Quarter': '🌓',
-                    'Waxing Gibbous': '🌔',
-                    'Full Moon': '🌕',
-                    'Waning Gibbous': '🌖',
-                    'Last Quarter': '🌗',
-                    'Waning Crescent': '🌘'
-                };
-                
-                moonIcon = phaseMap[curphase] || '🌙';
-                
-                moonHTML = `
-                    <div class="moon-display">
-                        <div class="label">MOON PHASE</div>
-                        <div class="moon-icon">${moonIcon}</div>
-                        <div class="moon-phase-name">${phaseName}</div>
-                        <div class="moon-illumination">${fracillum}% Illuminated</div>
-                    </div>
-                `;
-            }
+            // Calculate moon phase for Kathmandu
+            const moonData = calculateMoonPhase(time);
+            const moonHTML = `
+                <div class="moon-display">
+                    <div class="label">MOON PHASE</div>
+                    <div class="moon-icon">${moonData.phase.icon}</div>
+                    <div class="moon-phase-name">${moonData.phase.name}</div>
+                    <div class="moon-illumination">${(moonData.illumination * 100).toFixed(0)}% Illuminated</div>
+                </div>
+            `;
 
             // Build calendar
             const res = state.todayData.res;
@@ -541,8 +530,7 @@
             // Initial data fetch
             await Promise.all([
                 fetchTodayData(),
-                fetchTimeData(),
-                fetchMoonData()
+                fetchTimeData()
             ]);
 
             // Start clock
@@ -551,7 +539,6 @@
             // Schedule periodic updates
             setInterval(fetchTimeData, REFRESH_INTERVALS.time);
             setInterval(fetchTodayData, REFRESH_INTERVALS.today);
-            setInterval(fetchMoonData, REFRESH_INTERVALS.moon);
         }
 
         // Start the application
