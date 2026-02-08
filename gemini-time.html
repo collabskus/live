@@ -208,7 +208,6 @@
 
     <script>
         // --- Configuration ---
-        // Headers removed to prevent CORS preflight failures
         const ENDPOINT_TODAY = "https://calendar.bloggernepal.com/api/today";
         const ENDPOINT_TIME = "https://calendar.bloggernepal.com/api/time";
 
@@ -239,13 +238,10 @@
         }
 
         // --- Moon Phase Calculation (Local Algorithm) ---
-        // Replaces external API to avoid CORS issues while ensuring accuracy
         function updateMoonPhase() {
             const date = new Date();
             const synodicMonth = 29.53058867; // Days in a lunar month
-            // Known New Moon reference: January 6, 2000 at 18:14 UTC
-            // (We just need a known reference point in the past)
-            const referenceDate = new Date('2000-01-06T18:14:00Z');
+            const referenceDate = new Date('2000-01-06T18:14:00Z'); // Known New Moon
             
             const diffTime = date.getTime() - referenceDate.getTime();
             const diffDays = diffTime / (1000 * 60 * 60 * 24);
@@ -256,7 +252,6 @@
             let phase = "";
             let icon = "";
             
-            // Determine phase based on age (0 to ~29.5)
             if (ageOfMoon < 1.84) { phase = "New Moon"; icon = "🌑"; }
             else if (ageOfMoon < 5.53) { phase = "Waxing Crescent"; icon = "🌒"; }
             else if (ageOfMoon < 9.22) { phase = "First Quarter"; icon = "🌓"; }
@@ -267,9 +262,6 @@
             else if (ageOfMoon < 27.68) { phase = "Waning Crescent"; icon = "🌘"; }
             else { phase = "New Moon"; icon = "🌑"; }
 
-            // Calculate Illumination Percentage
-            // 0% at New Moon, 100% at Full Moon (roughly half cycle)
-            // Use Cosine function for smooth transition
             const illumination = Math.round((1 - Math.cos((currentCycleProgress * 2 * Math.PI))) / 2 * 100);
 
             elMoonPhase.textContent = phase;
@@ -281,20 +273,33 @@
 
         async function fetchToday() {
             try {
-                // No headers passed to avoid CORS preflight rejection
+                // Fetch request without custom headers to avoid CORS preflight issues
                 const response = await fetch(ENDPOINT_TODAY);
                 if (!response.ok) throw new Error("Date API Failed");
                 
                 const data = await response.json();
                 
-                // Parse Logic
-                let dateStr = "Unknown Date";
-                if (typeof data === 'string') dateStr = data;
-                else if (data.str) dateStr = data.str;
-                else if (data.date) dateStr = data.date;
-                else if (data.nepaliDate) dateStr = data.nepaliDate;
+                // --- Corrected Parsing Logic ---
+                // The API returns { res: { year: 2081, name: "MonthName", days: [...] } }
+                // We need to find the day where 'tag' === 'today'
                 
-                elDateNepali.textContent = dateStr;
+                let foundDate = false;
+
+                if (data && data.res && Array.isArray(data.res.days)) {
+                    const todayData = data.res.days.find(day => day.tag === 'today');
+                    
+                    if (todayData) {
+                        // Format: "MonthName Day, Year" (e.g., "Magh 26, 2081")
+                        elDateNepali.textContent = `${data.res.name} ${todayData.bs}, ${data.res.year}`;
+                        foundDate = true;
+                    }
+                }
+
+                if (!foundDate) {
+                    // Fallback if structure changes but we got a response
+                    console.warn("Date parsed incorrectly, using fallback or raw data");
+                    elDateNepali.textContent = "Date Update Pending";
+                }
                 
                 // Gregorian Date (Local to Kathmandu)
                 const ktmNow = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kathmandu"}));
@@ -310,11 +315,10 @@
             try {
                 elDot.style.backgroundColor = "#fbbf24"; // Yellow sync
                 
-                // Simple Fetch to check connectivity
+                // Ping time API for connection check
                 const response = await fetch(ENDPOINT_TIME);
                 if (!response.ok) throw new Error("Time API Failed");
                 
-                // If successful, we update our "Last Sync" timestamp
                 lastSyncTime = new Date();
                 const ktmSyncTime = new Date(lastSyncTime.toLocaleString("en-US", {timeZone: "Asia/Kathmandu"}));
                 
@@ -333,8 +337,8 @@
 
         // --- Real-time Clock Logic ---
         function updateRealTimeClock() {
-            // Get current time in Kathmandu timezone
             const now = new Date();
+            // Force Kathmandu Timezone
             const ktmString = now.toLocaleString("en-US", {timeZone: "Asia/Kathmandu"});
             const ktmDate = new Date(ktmString);
 
@@ -350,14 +354,14 @@
             fetchToday();
             updateMoonPhase();
 
-            // 2. Start Real-time Clock
+            // 2. Start Real-time Clock (Ticks every second)
             setInterval(updateRealTimeClock, 1000);
             updateRealTimeClock(); 
 
             // 3. Schedule Background Fetches
-            setInterval(fetchTime, 3600000); // 1 Hour
-            setInterval(fetchToday, 86400000); // 24 Hours
-            setInterval(updateMoonPhase, 86400000); // 24 Hours (Local Calc)
+            setInterval(fetchTime, 3600000); // Sync check every 1 Hour
+            setInterval(fetchToday, 86400000); // Date check every 24 Hours
+            setInterval(updateMoonPhase, 86400000); // Moon phase every 24 Hours
         }
 
         window.addEventListener('DOMContentLoaded', init);
