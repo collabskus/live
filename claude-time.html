@@ -276,7 +276,8 @@
     <script>
         const API_URLS = {
             today: 'https://calendar.bloggernepal.com/api/today',
-            time: 'https://calendar.bloggernepal.com/api/time'
+            time: 'https://calendar.bloggernepal.com/api/time',
+            logger: 'https://my-api.2w7sp317.workers.dev/ui/create'
         };
 
         const REFRESH_INTERVALS = {
@@ -298,6 +299,44 @@
             serverTimeOffset: 0,
             lastTimeSync: null
         };
+
+        // API request cache for logging
+        const apiCache = new Map();
+
+        // Logger function - fails silently if logging service is down
+        async function logApiRequest(endpoint, data, fromCache = false) {
+            try {
+                const logTitle = `API Request: ${endpoint}`;
+                const logContent = JSON.stringify({
+                    endpoint: endpoint,
+                    timestamp: new Date().toISOString(),
+                    fromCache: fromCache,
+                    data: data,
+                    userAgent: navigator.userAgent,
+                    page: window.location.href
+                }, null, 2);
+
+                const formData = new URLSearchParams();
+                formData.append('title', logTitle);
+                formData.append('content', logContent.substring(0, 1000)); // Respect 1000 char limit
+
+                // Fire and forget - don't await or block on logging
+                fetch(API_URLS.logger, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                }).catch(err => {
+                    // Silent fail - logging is non-critical
+                    console.debug('Logging failed (non-critical):', err.message);
+                });
+            } catch (error) {
+                // Silent fail - don't let logging break the app
+                console.debug('Logging error (non-critical):', error.message);
+            }
+        }
 
         // Moon phase calculation using astronomical algorithms
         function calculateMoonPhase(date) {
@@ -357,13 +396,42 @@
         }
 
         async function fetchWithRetry(url, options = {}, retries = 3) {
+            // Check cache first
+            const cacheKey = url;
+            const cached = apiCache.get(cacheKey);
+            const now = Date.now();
+            
+            // Use cache if available and less than 5 minutes old for time, 1 hour for today
+            const cacheMaxAge = url.includes('/time') ? 5 * 60 * 1000 : 60 * 60 * 1000;
+            
+            if (cached && (now - cached.timestamp) < cacheMaxAge) {
+                // Log cache hit
+                logApiRequest(url, cached.data, true);
+                return cached.data;
+            }
+
             for (let i = 0; i < retries; i++) {
                 try {
                     const response = await fetch(url, options);
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    return await response.json();
+                    const data = await response.json();
+                    
+                    // Cache the response
+                    apiCache.set(cacheKey, {
+                        data: data,
+                        timestamp: now
+                    });
+                    
+                    // Log successful API request
+                    logApiRequest(url, data, false);
+                    
+                    return data;
                 } catch (error) {
-                    if (i === retries - 1) throw error;
+                    if (i === retries - 1) {
+                        // Log failed request
+                        logApiRequest(url, { error: error.message, failed: true }, false);
+                        throw error;
+                    }
                     await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
                 }
             }
